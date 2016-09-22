@@ -6,28 +6,36 @@ require 'base64'
 require 'openssl'
 require 'uri'
 
-response = open('https://www.goodreads.com/author/list/1825?format=xml&page=1&per_page=1000&key=ACCESS_KEY').read
-doc = Nokogiri::XML.parse(response)
-isbn = []
-title = []
-doc.xpath('//book').each do |author|
-	if(author.at_xpath('isbn').text!='')
-		isbn << author.at_xpath('isbn').content
-	end
-	if(author.at_xpath('isbn').text=='')
-		title << author.at_xpath('title').text
+ACCESS_IDENTIFIER = 'ACCESS_KEY'
+SECRET_IDENTIFIER = 'SECRET_IDENTIFIER'
+
+@isbn = []
+@title = []
+
+def goodreads_books(author_id)
+	response = open("https://www.goodreads.com/author/list/#{author_id}?format=xml&page=1&per_page=1000&key=ACCESS_KEY").read
+	doc = Nokogiri::XML.parse(response)
+	doc.xpath('//book').each do |author|
+		if(author.at_xpath('isbn').text!='')
+			@isbn << author.at_xpath('isbn').content
+		end
+		if(author.at_xpath('isbn').text=='')
+			@title << author.at_xpath('title').text
+		end
 	end
 end
+	
+puts "Enter the URL"
+goodreads_url = gets.chomp
+author_id = goodreads_url.split('/').last.split('.').first
+goodreads_books(author_id)
 
-ACCESS_IDENTIFIER = 'ACCESS_IDENTIFIER'
-SECRET_IDENTIFIER = 'SECRET_IDENTIFIER'
 
 def aws_escape(s)
   s.gsub(/[^A-Za-z0-9_.~-]/) { |c| '%' + c.ord.to_s(16).upcase }
 end
 
 def signing_logic(params)
-
 	amazon_endpoint= "webservices.amazon.in"
 	amazon_path = "/onca/xml"
 
@@ -52,20 +60,21 @@ def signing_logic(params)
 
 	signed_url = URI("http://#{amazon_endpoint}#{amazon_path}?#{querystring}")
 end
-(0..isbn.length - 1).step(10) do |index|
-	if((isbn.length - 1 - index)>=10)
+
+(0..@isbn.length - 1).step(10) do |index|
+	if((@isbn.length - 1 - index)>=10)
 		params1 = {
 			:Service => "AWSECommerceService",
 			:AssociateTag => "thrilllife-21",
 			:Operation => "ItemLookup",
 			:IdType => 'ISBN',
 			:SearchIndex => 'Books',
-			:ItemId => isbn[index],
+			:ItemId => @isbn[index],
 			:ResponseGroup => "AlternateVersions",
 			:Version => "2015-10-01"
 		}
 		(1..9).each do |i|
-			params1[:ItemId] << ', ' << isbn[index+i] 
+			params1[:ItemId] << ', ' << @isbn[index+i] 
 		end
 	else
 		params1 = {
@@ -74,12 +83,12 @@ end
 			:Operation => "ItemLookup",
 			:IdType => 'ISBN',
 			:SearchIndex => 'Books',
-			:ItemId => isbn[index],
+			:ItemId => @isbn[index],
 			:ResponseGroup => "AlternateVersions",
 			:Version => "2015-10-01"
 		}
-		(index+1..isbn.length-1).each do |i|
-			params1[:ItemId] << ', ' << isbn[i]
+		(index+1..@isbn.length-1).each do |i|
+			params1[:ItemId] << ', ' << @isbn[i]
 		end
 
 	end	
